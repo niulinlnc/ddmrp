@@ -1,9 +1,10 @@
-# Copyright 2016-18 Eficent Business and IT Consulting Services S.L.
+# Copyright 2016-19 Eficent Business and IT Consulting Services S.L.
 #   (http://www.eficent.com)
 # Copyright 2016 Aleph Objects, Inc. (https://www.alephobjects.com/)
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
 
 import logging
+from math import pi
 
 from odoo import api, fields, models, _
 from datetime import datetime, timedelta
@@ -16,6 +17,7 @@ try:
     from bokeh.plotting import figure
     from bokeh.embed import components
     from bokeh.models import Legend, ColumnDataSource, LabelSet
+    from bokeh.models import HoverTool, DatetimeTickFormatter
 except (ImportError, IOError) as err:
     _logger.debug(err)
 
@@ -153,29 +155,33 @@ class StockWarehouseOrderpoint(models.Model):
             else:
                 if subtract_qty[rec.id] > 0.0:
                     procure_recommended_qty -= subtract_qty[rec.id]
-            if procure_recommended_qty > 0.0:
-                reste = rec.qty_multiple > 0 and \
-                    procure_recommended_qty % rec.qty_multiple or 0.0
 
+            adjusted_qty = 0.0
+            if procure_recommended_qty > 0.0:
+                # If there is a procure UoM we apply it before anything.
+                # This means max, min and multiple quantities are relative to
+                # the procure UoM.
                 if rec.procure_uom_id:
                     rounding = rec.procure_uom_id.rounding
+                    adjusted_qty = rec.product_id.uom_id._compute_quantity(
+                        procure_recommended_qty, rec.procure_uom_id)
                 else:
                     rounding = rec.product_uom.rounding
+                    adjusted_qty = procure_recommended_qty
 
+                # Apply qty multiple and minimum quantity (maximum quantity
+                # applies on the procure wizard)
+                reste = rec.qty_multiple > 0 and \
+                    adjusted_qty % rec.qty_multiple or 0.0
                 if float_compare(
                         reste, 0.0,
                         precision_rounding=rounding) > 0:
-                    procure_recommended_qty += rec.qty_multiple - reste
+                    adjusted_qty += rec.qty_multiple - reste
+                if float_compare(adjusted_qty, rec.product_min_qty,
+                                 precision_rounding=rounding) < 0:
+                    adjusted_qty = rec.product_min_qty
 
-                if rec.procure_uom_id:
-                    product_qty = rec.product_id.uom_id._compute_quantity(
-                        procure_recommended_qty, rec.procure_uom_id)
-                else:
-                    product_qty = procure_recommended_qty
-            else:
-                product_qty = 0.0
-
-            rec.procure_recommended_qty = product_qty
+            rec.procure_recommended_qty = adjusted_qty
 
     def _compute_ddmrp_chart(self):
         """This method use the Bokeh library to create a buffer depiction."""
@@ -183,6 +189,7 @@ class StockWarehouseOrderpoint(models.Model):
             p = figure(plot_width=300, plot_height=400,
                        y_axis_label='Quantity')
             p.xaxis.visible = False
+            p.toolbar.logo = None
             red = p.vbar(x=1, bottom=0, top=rec.top_of_red, width=1,
                          color='red', legend=False)
             yellow = p.vbar(x=1, bottom=rec.top_of_red, top=rec.top_of_yellow,
@@ -225,6 +232,100 @@ class StockWarehouseOrderpoint(models.Model):
 
             script, div = components(p)
             rec.ddmrp_chart = '%s%s' % (div, script)
+
+    def _compute_ddmrp_demand_supply_chart(self):
+        for rec in self:
+            if not rec.buffer_profile_id:
+                # Not a buffer, skip.
+                rec.ddmrp_demand_chart = ''
+                rec.ddmrp_supply_chart = ''
+                continue
+
+            # Prepare data:
+            demand_data = rec._get_demand_by_days()
+            mrp_data = rec._get_qualified_mrp_moves()
+            supply_data = rec._get_incoming_by_days()
+            width = timedelta(days=0.4)
+            date_format = self.env['res.lang']._lang_get(
+                self.env.lang).date_format
+
+            # Plot demand data:
+            if demand_data or mrp_data:
+                x_demand = list(demand_data.keys())
+                y_demand = list(demand_data.values())
+                x_mrp = list(mrp_data.keys())
+                y_mrp = list(mrp_data.values())
+
+                p = figure(plot_width=500, plot_height=400,
+                           y_axis_label='Quantity', x_axis_type='datetime')
+                p.toolbar.logo = None
+                p.sizing_mode = 'stretch_both'
+                # TODO: # p.xaxis.label_text_font = 'helvetica'
+                p.xaxis.formatter = DatetimeTickFormatter(
+                    hours=date_format, days=date_format, months=date_format,
+                    years=date_format)
+                p.xaxis.major_label_orientation = pi / 4
+
+                if demand_data:
+                    p.vbar(x=x_demand, width=width, bottom=0, top=y_demand,
+                           color="firebrick")
+                if mrp_data:
+                    p.vbar(x=x_mrp, width=width, bottom=0, top=y_mrp,
+                           color="lightsalmon")
+                p.line(
+                    [datetime.today() - timedelta(days=1),
+                     datetime.today() + timedelta(
+                         days=rec.order_spike_horizon)],
+                    [rec.order_spike_threshold, rec.order_spike_threshold],
+                    line_width=2, line_dash='dashed')
+
+                unit = rec.product_uom.name
+                hover = HoverTool(
+                    tooltips=[("qty", "$y %s" % unit)],
+                    point_policy='follow_mouse')
+                p.add_tools(hover)
+
+                script, div = components(p)
+                rec.ddmrp_demand_chart = '%s%s' % (div, script)
+            else:
+                rec.ddmrp_demand_chart = _('No demand detected.')
+
+            # Plot supply data:
+            if supply_data:
+                x_supply = list(supply_data.keys())
+                y_supply = list(supply_data.values())
+
+                p = figure(plot_width=500, plot_height=400,
+                           y_axis_label='Quantity', x_axis_type='datetime')
+                p.toolbar.logo = None
+                p.sizing_mode = 'stretch_both'
+                p.xaxis.formatter = DatetimeTickFormatter(
+                    hours=date_format, days=date_format, months=date_format,
+                    years=date_format)
+                p.xaxis.major_label_orientation = pi / 4
+                p.x_range.flipped = True
+
+                # White line to have similar proportion to demand chart.
+                p.line(
+                    [datetime.today() - timedelta(days=1),
+                     datetime.today() + timedelta(
+                         days=rec.order_spike_horizon)],
+                    [rec.order_spike_threshold, rec.order_spike_threshold],
+                    line_width=2, line_dash='dashed', color='white')
+
+                p.vbar(x=x_supply, width=width, bottom=0, top=y_supply,
+                       color="grey")
+
+                unit = rec.product_uom.name
+                hover = HoverTool(
+                    tooltips=[("qty", "$y %s" % unit)],
+                    point_policy='follow_mouse')
+                p.add_tools(hover)
+
+                script, div = components(p)
+                rec.ddmrp_supply_chart = '%s%s' % (div, script)
+            else:
+                rec.ddmrp_supply_chart = _('No supply detected.')
 
     @api.multi
     @api.depends("red_zone_qty")
@@ -278,6 +379,8 @@ class StockWarehouseOrderpoint(models.Model):
     adu_calculation_method = fields.Many2one(
         comodel_name="product.adu.calculation.method",
         string="ADU calculation method")
+    adu_calculation_method_type = fields.Selection(
+        related="adu_calculation_method.method")
     adu_fixed = fields.Float(string="Fixed ADU",
                              default=1.0, digits=UNIT)
     order_cycle = fields.Float(string="Minimum Order Cycle (days)")
@@ -351,25 +454,21 @@ class StockWarehouseOrderpoint(models.Model):
                                          string='PO Lines', copy=False)
     ddmrp_chart = fields.Text(string='DDMRP Chart',
                               compute=_compute_ddmrp_chart)
+    ddmrp_demand_chart = fields.Text(
+        string='DDMRP Demand Chart',
+        compute='_compute_ddmrp_demand_supply_chart',
+    )
+    ddmrp_supply_chart = fields.Text(
+        string='DDMRP Supply Chart',
+        compute='_compute_ddmrp_demand_supply_chart',
+    )
 
     _order = 'planning_priority_level asc, net_flow_position asc'
-
-    @api.multi
-    @api.onchange("red_zone_qty")
-    def onchange_red_zone_qty(self):
-        for rec in self:
-            rec.product_min_qty = rec.red_zone_qty
 
     @api.multi
     @api.onchange("adu_fixed", "adu_calculation_method")
     def onchange_adu(self):
         self._calc_adu()
-
-    @api.multi
-    @api.onchange("top_of_green")
-    def onchange_green_zone_qty(self):
-        for rec in self:
-            rec.product_max_qty = rec.top_of_green
 
     @api.multi
     def _search_open_stock_moves_domain(self):
@@ -430,14 +529,20 @@ class StockWarehouseOrderpoint(models.Model):
     def _calc_adu_past_demand(self):
         self.ensure_one()
         horizon = self.adu_calculation_method.horizon_past or 0
+        # today is excluded to be sure that is a past day and all moves
+        # for that day are done (or at least the expected date is in the past).
         if self.warehouse_id.calendar_id:
             dt_from = self.warehouse_id.calendar_id.plan_days(
                 -1 * horizon - 1, datetime.now())
             date_from = fields.Date.to_string(dt_from)
+            dt_to = self.warehouse_id.calendar_id.plan_days(
+                -1 - 1, datetime.now())
+            date_to = fields.Date.to_string(dt_to)
         else:
             date_from = fields.Date.to_string(
                 fields.date.today() - timedelta(days=horizon))
-        date_to = fields.Date.today()
+            date_to = fields.Date.to_string(
+                fields.date.today() - timedelta(days=1))
         locations = self.env['stock.location'].search(
             [('id', 'child_of', [self.location_id.id])])
         if self.adu_calculation_method.source_past == 'estimates':
@@ -575,24 +680,87 @@ class StockWarehouseOrderpoint(models.Model):
                 ('date_expected', '<=', date_to)]
 
     @api.multi
+    def _get_incoming_by_days(self):
+        self.ensure_one()
+        incoming_dom = self._search_stock_moves_incoming_domain()
+        moves = self.env['stock.move'].search(incoming_dom)
+        incoming_by_days = {}
+        move_dates = [fields.Datetime.from_string(dt).date() for dt in
+                      moves.mapped('date_expected')]
+        for move_date in move_dates:
+            incoming_by_days[move_date] = 0.0
+        for move in moves:
+            date = fields.Datetime.from_string(
+                move.date_expected).date()
+            incoming_by_days[date] += \
+                move.product_qty
+        return incoming_by_days
+
+    @api.multi
+    def _get_demand_by_days(self):
+        self.ensure_one()
+        domain = self._search_stock_moves_qualified_demand_domain()
+        moves = self.env['stock.move'].search(domain)
+        demand_by_days = {}
+        move_dates = [fields.Datetime.from_string(dt).date() for dt in
+                      moves.mapped('date_expected')]
+        for move_date in move_dates:
+            demand_by_days[move_date] = 0.0
+        for move in moves:
+            date = fields.Datetime.from_string(move.date_expected).date()
+            demand_by_days[date] += \
+                move.product_qty - move.reserved_availability
+        return demand_by_days
+
+    @api.multi
+    def _search_mrp_moves_qualified_demand_domain(self):
+        self.ensure_one()
+        horizon = self.order_spike_horizon
+        if self.warehouse_id.calendar_id:
+            dt_to = self.warehouse_id.calendar_id.plan_days(
+                horizon + 1, datetime.now())
+            date_to = fields.Date.to_string(dt_to)
+        else:
+            date_to = fields.Date.to_string(fields.date.today() +
+                                            timedelta(days=horizon))
+        locations = self.env['stock.location'].search(
+            [('id', 'child_of', [self.location_id.id])])
+        return [('product_id', '=', self.product_id.id),
+                ('mrp_area_id.location_id', 'in', locations.ids),
+                ('mrp_type', '=', 'd'),
+                ('mrp_date', '<=', date_to)]
+
+    @api.multi
+    def _get_qualified_mrp_moves(self):
+        self.ensure_one()
+        domain = self._search_mrp_moves_qualified_demand_domain()
+        moves = self.env['mrp.move'].search(domain)
+        mrp_moves_by_days = {}
+        move_dates = [fields.Date.from_string(dt) for dt in
+                      moves.mapped('mrp_date')]
+        for move_date in move_dates:
+            mrp_moves_by_days[move_date] = 0.0
+        for move in moves:
+            date = fields.Datetime.from_string(move.mrp_date).date()
+            mrp_moves_by_days[date] += abs(move.mrp_qty)
+        return mrp_moves_by_days
+
+    @api.multi
     def _calc_qualified_demand(self):
         for rec in self:
             rec.qualified_demand = 0.0
-            domain = rec._search_stock_moves_qualified_demand_domain()
-            moves = self.env['stock.move'].search(domain)
-            demand_by_days = {}
-            move_dates = [fields.Datetime.from_string(dt).date() for dt in
-                          moves.mapped('date_expected')]
-            for move_date in move_dates:
-                demand_by_days[move_date] = 0.0
-            for move in moves:
-                date = fields.Datetime.from_string(move.date_expected).date()
-                demand_by_days[date] += \
-                    move.product_qty - move.reserved_availability
-            for date in demand_by_days:
-                if demand_by_days[date] >= rec.order_spike_threshold \
+            demand_by_days = rec._get_demand_by_days()
+            mrp_moves_by_days = rec._get_qualified_mrp_moves()
+            dates = list(demand_by_days.keys()) + \
+                list(mrp_moves_by_days.keys())
+            for date in dates:
+                if demand_by_days.get(date, 0.0) >= rec.order_spike_threshold \
                         or date <= fields.date.today():
-                    rec.qualified_demand += demand_by_days[date]
+                    rec.qualified_demand += demand_by_days.get(date, 0.0)
+                if mrp_moves_by_days.get(date, 0.0) >= \
+                        rec.order_spike_threshold \
+                        or date <= fields.date.today():
+                    rec.qualified_demand += mrp_moves_by_days.get(date, 0.0)
         return True
 
     @api.multi

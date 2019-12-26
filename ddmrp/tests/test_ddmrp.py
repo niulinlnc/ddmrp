@@ -54,6 +54,7 @@ class TestDdmrp(common.SavepointCase):
         cls.uom_unit = cls.env.ref('product.product_uom_unit')
         cls.buffer_profile_pur = cls.env.ref(
             'ddmrp.stock_buffer_profile_replenish_purchased_medium_medium')
+        cls.adu_fixed = cls.env.ref('ddmrp.adu_calculation_method_fixed')
         cls.group_stock_manager = cls.env.ref('stock.group_stock_manager')
         cls.group_mrp_user = cls.env.ref('mrp.group_mrp_user')
         cls.group_change_procure_qty = cls.env.ref(
@@ -181,6 +182,15 @@ class TestDdmrp(common.SavepointCase):
                 })]
         })
 
+    def _do_picking(self, picking, date):
+        """Do picking with only one move on the given date."""
+        picking.action_confirm()
+        picking.force_assign()
+        picking.move_lines.quantity_done = picking.move_lines.product_uom_qty
+        picking.action_done()
+        for move in picking.move_lines:
+            move.date = date
+
     def create_orderpoint_procurement(self, orderpoint):
         """Make Procurement from Reordering Rule"""
         context = {
@@ -194,8 +204,6 @@ class TestDdmrp(common.SavepointCase):
         return wizard
 
     def test_adu_calculation_fixed(self):
-        method = self.env.ref('ddmrp.adu_calculation_method_fixed')
-
         orderpointA = self.orderpointModel.create({
             'buffer_profile_id': self.buffer_profile_pur.id,
             'product_id': self.productA.id,
@@ -204,7 +212,7 @@ class TestDdmrp(common.SavepointCase):
             'product_min_qty': 0.0,
             'product_max_qty': 0.0,
             'qty_multiple': 0.0,
-            'adu_calculation_method': method.id,
+            'adu_calculation_method': self.adu_fixed.id,
             'adu_fixed': 4
         })
         self.orderpointModel.cron_ddmrp_adu()
@@ -229,25 +237,109 @@ class TestDdmrp(common.SavepointCase):
 
         self.assertEqual(orderpointA.adu, 0)
 
-        pickingOuts = self.pickingModel
-
         days = 30
         date_move = self.calendar.plan_days(
             -1 * days - 1, datetime.today())
-        pickingOuts += self.create_pickingoutA(date_move, 60)
+        pick_out_1 = self.create_pickingoutA(date_move, 60)
+        self._do_picking(pick_out_1, date_move)
         days = 60
         date_move = self.calendar.plan_days(
             -1 * days - 1, datetime.today())
-        pickingOuts += self.create_pickingoutA(date_move, 60)
-        for picking in pickingOuts:
-            picking.action_confirm()
-            picking.force_assign()
-            picking.move_lines.quantity_done = 60
-            picking.action_done()
+        pick_out_2 = self.create_pickingoutA(date_move, 60)
+        self._do_picking(pick_out_2, date_move)
 
         self.orderpointModel.cron_ddmrp_adu()
         to_assert_value = (60 + 60) / 120
         self.assertEqual(orderpointA.adu, to_assert_value)
+
+    def test_adu_calculation_window_past(self):
+        """Test that the window considered to calculate the ADU is correct."""
+        self.warehouse.calendar_id = False
+        method = self.aducalcmethodModel.create({
+            'name': 'Past actual demand (6 days)',
+            'method': 'past',
+            'source_past': 'actual',
+            'horizon_past': 6,
+            'company_id': self.main_company.id
+        })
+        orderpointA = self.orderpointModel.create({
+            'buffer_profile_id': self.buffer_profile_pur.id,
+            'product_id': self.productA.id,
+            'location_id': self.stock_location.id,
+            'warehouse_id': self.warehouse.id,
+            'product_min_qty': 0.0,
+            'product_max_qty': 0.0,
+            'qty_multiple': 0.0,
+            'adu_calculation_method': method.id,
+            'adu_fixed': 4
+        })
+        # Today should be excluded
+        date_move_1 = datetime.today()
+        picking_1 = self.create_pickingoutA(date_move_1, 20)
+        self._do_picking(picking_1, date_move_1)
+        # The next moves should be considered
+        date_move_2 = datetime.today() - timedelta(days=1)
+        picking_2 = self.create_pickingoutA(date_move_2, 20)
+        self._do_picking(picking_2, date_move_2)
+        date_move_3 = datetime.today() - timedelta(days=4)
+        picking_3 = self.create_pickingoutA(date_move_3, 20)
+        self._do_picking(picking_3, date_move_3)
+        date_move_4 = datetime.today() - timedelta(days=6)
+        picking_4 = self.create_pickingoutA(date_move_4, 10)
+        self._do_picking(picking_4, date_move_4)
+
+        # Check ADU:
+        orderpointA._calc_adu()
+        to_assert_value = (20 + 20 + 10) / 6
+        self.assertAlmostEqual(orderpointA.adu, to_assert_value, places=2)
+
+    def test_adu_calculation_window_past_calendar(self):
+        """Test that the window considered to calculate the ADU is correct.
+        (With working days set)."""
+        self.warehouse.calendar_id = self.calendar
+        method = self.aducalcmethodModel.create({
+            'name': 'Past actual demand (6 days)',
+            'method': 'past',
+            'source_past': 'actual',
+            'horizon_past': 6,
+            'company_id': self.main_company.id
+        })
+        orderpointA = self.orderpointModel.create({
+            'buffer_profile_id': self.buffer_profile_pur.id,
+            'product_id': self.productA.id,
+            'location_id': self.stock_location.id,
+            'warehouse_id': self.warehouse.id,
+            'product_min_qty': 0.0,
+            'product_max_qty': 0.0,
+            'qty_multiple': 0.0,
+            'adu_calculation_method': method.id,
+            'adu_fixed': 4
+        })
+        # Today should be excluded
+        date_move_1 = datetime.today()
+        picking_1 = self.create_pickingoutA(date_move_1, 20)
+        self._do_picking(picking_1, date_move_1)
+        # The next moves should be considered
+        days = 2
+        date_move_2 = self.calendar.plan_days(
+            -1 * days - 1, datetime.today())
+        picking_2 = self.create_pickingoutA(date_move_2, 20)
+        self._do_picking(picking_2, date_move_2)
+        days = 4
+        date_move_3 = self.calendar.plan_days(
+            -1 * days - 1, datetime.today())
+        picking_3 = self.create_pickingoutA(date_move_3, 20)
+        self._do_picking(picking_3, date_move_3)
+        days = 6
+        date_move_4 = self.calendar.plan_days(
+            -1 * days - 1, datetime.today())
+        picking_4 = self.create_pickingoutA(date_move_4, 10)
+        self._do_picking(picking_4, date_move_4)
+
+        # Check ADU:
+        orderpointA._calc_adu()
+        to_assert_value = (20 + 20 + 10) / 6
+        self.assertAlmostEqual(orderpointA.adu, to_assert_value, places=2)
 
     def test_adu_calculation_internal_past_120_days(self):
         """
@@ -373,21 +465,17 @@ class TestDdmrp(common.SavepointCase):
         })
 
         # Past. Generate past moves: 360 units / 120 days = 3 unit/day
-        pickingOuts = self.pickingModel
 
         days = 30
         date_move = self.calendar.plan_days(
             -1 * days - 1, datetime.today())
-        pickingOuts += self.create_pickingoutA(date_move, 180)
+        pick_out_1 = self.create_pickingoutA(date_move, 180)
+        self._do_picking(pick_out_1, date_move)
         days = 60
         date_move = self.calendar.plan_days(
             -1 * days - 1, datetime.today())
-        pickingOuts += self.create_pickingoutA(date_move, 180)
-        for picking in pickingOuts:
-            picking.action_confirm()
-            picking.force_assign()
-            picking.move_lines.quantity_done = 180
-            picking.action_done()
+        pick_out_2 = self.create_pickingoutA(date_move, 180)
+        self._do_picking(pick_out_2, date_move)
 
         # Future. create estimate: 120 units / 120 days = 1 unit/day
         self.estimateModel.create({
@@ -1002,6 +1090,27 @@ class TestDdmrp(common.SavepointCase):
         })
         self.assertEqual(bomC.is_buffered, True)
         self.assertEqual(bomC.orderpoint_id, orderpointA)
+
+    def test_bokeh_charts(self):
+        # Check that chart computation do not raise an error:
+        date_move = datetime.today()
+        self.create_pickingoutA(date_move, 150)
+        self.create_pickinginA(date_move, 150)
+        orderpointA = self.orderpointModel.create({
+            'buffer_profile_id': self.buffer_profile_pur.id,
+            'product_id': self.productA.id,
+            'location_id': self.stock_location.id,
+            'warehouse_id': self.warehouse.id,
+            'product_min_qty': 0.0,
+            'product_max_qty': 0.0,
+            'qty_multiple': 0.0,
+            'adu_calculation_method': self.adu_fixed.id,
+            'adu_fixed': 4
+        })
+        orderpointA.cron_actions()
+        self.assertTrue(orderpointA.ddmrp_chart)
+        self.assertTrue(orderpointA.ddmrp_demand_chart)
+        self.assertTrue(orderpointA.ddmrp_supply_chart)
 
 
 class TestBomDLT(common.TransactionCase):

@@ -127,6 +127,7 @@ msgstr "Amortiguadores"
 
 #. module: ddmrp
 #: model:ir.model.fields,field_description:ddmrp.field_product_adu_calculation_method_method
+#: model:ir.model.fields,field_description:ddmrp.field_stock_warehouse_orderpoint_adu_calculation_method_type
 msgid "Calculation method"
 msgstr "Método de cálculo"
 
@@ -201,6 +202,20 @@ msgid "DDMRP Chart"
 msgstr "Gráfico DDMRP"
 
 #. module: ddmrp
+#: model:ir.model.fields,field_description:ddmrp.field_stock_warehouse_orderpoint_ddmrp_demand_chart
+#, fuzzy
+#| msgid "DDMRP Chart"
+msgid "DDMRP Demand Chart"
+msgstr "Gráfico DDMRP"
+
+#. module: ddmrp
+#: model:ir.model.fields,field_description:ddmrp.field_stock_warehouse_orderpoint_ddmrp_supply_chart
+#, fuzzy
+#| msgid "DDMRP Chart"
+msgid "DDMRP Supply Chart"
+msgstr "Gráfico DDMRP"
+
+#. module: ddmrp
 #: model:ir.ui.view,arch_db:ddmrp.report_mrpbomstructure_ddmrp
 msgid "DLT"
 msgstr "PED"
@@ -211,6 +226,11 @@ msgstr "PED"
 #: model:ir.model.fields,field_description:ddmrp.field_stock_warehouse_orderpoint_dlt
 msgid "Decoupled Lead Time (days)"
 msgstr "Plazo de Entrega Desacoplado (días)"
+
+#. module: ddmrp
+#: model:ir.ui.view,arch_db:ddmrp.view_warehouse_orderpoint_form
+msgid "Demand"
+msgstr ""
 
 #. module: ddmrp
 #: model:ir.model.fields,field_description:ddmrp.field_ddmrp_run_display_name
@@ -415,7 +435,7 @@ msgstr "Última Modificación en"
 
 #. module: ddmrp
 #: model:ir.model.fields,field_description:ddmrp.field_stock_buffer_profile_lead_time_factor
-#: model:ir.model.fields,field_description:ddmrp.field_stock_buffer_profile_lead_time_id_5648
+#: model:ir.model.fields,field_description:ddmrp.field_stock_buffer_profile_lead_time_id_5689
 msgid "Lead Time Factor"
 msgstr "Factor de Plazo de Entrega"
 
@@ -499,7 +519,19 @@ msgid "Net flow position (% of TOG)"
 msgstr "Posición de flujo neto (% de TdV)"
 
 #. module: ddmrp
-#: code:addons/ddmrp/models/stock_warehouse_orderpoint.py:394
+#: code:addons/ddmrp/models/stock_warehouse_orderpoint.py:291
+#, python-format
+msgid "No demand detected."
+msgstr ""
+
+#. module: ddmrp
+#: code:addons/ddmrp/models/stock_warehouse_orderpoint.py:328
+#, python-format
+msgid "No supply detected."
+msgstr ""
+
+#. module: ddmrp
+#: code:addons/ddmrp/models/stock_warehouse_orderpoint.py:493
 #, python-format
 msgid "Non-completed Moves"
 msgstr "Movimientos no completados"
@@ -727,11 +759,6 @@ msgid "Reordering Rule DDMRP calculation"
 msgstr "Cálculo DDMRP para regla de reabastecimiento"
 
 #. module: ddmrp
-#: model:ir.model.fields,field_description:ddmrp.field_mrp_production_orderpoint_id
-msgid "Reordering rule"
-msgstr "Regla de reabastecimiento"
-
-#. module: ddmrp
 #: selection:stock.buffer.profile,replenish_method:0
 msgid "Replenished"
 msgstr "Con Buffer"
@@ -799,6 +826,16 @@ msgstr "Buffer de Inventario"
 #: model:ir.ui.menu,name:ddmrp.menu_action_ddmrp_stock_buffer_planning
 msgid "Stock Buffer Planning"
 msgstr "Planificación de Buffer de Inventario"
+
+#. module: ddmrp
+#: model:ir.ui.view,arch_db:ddmrp.view_warehouse_orderpoint_form
+msgid "Supply"
+msgstr ""
+
+#. module: ddmrp
+#: model:ir.ui.view,arch_db:ddmrp.view_warehouse_orderpoint_form
+msgid "Supply & Demand"
+msgstr ""
 
 #. module: ddmrp
 #: model:ir.ui.view,arch_db:ddmrp.view_warehouse_orderpoint_form
@@ -872,7 +909,7 @@ msgstr "UdM"
 
 #. module: ddmrp
 #: model:ir.model.fields,field_description:ddmrp.field_stock_buffer_profile_variability_factor
-#: model:ir.model.fields,field_description:ddmrp.field_stock_buffer_profile_variability_id_5649
+#: model:ir.model.fields,field_description:ddmrp.field_stock_buffer_profile_variability_id_5690
 msgid "Variability Factor"
 msgstr "Factor de Variabilidad"
 
@@ -975,6 +1012,9 @@ msgstr "'stock.buffer.profile.lead.time'"
 #: model:ir.model,name:ddmrp.model_stock_buffer_profile_variability
 msgid "stock.buffer.profile.variability"
 msgstr "'stock.buffer.profile.variability'"
+
+#~ msgid "Reordering rule"
+#~ msgstr "Regla de reabastecimiento"
 
 #~ msgid "Use Estimates"
 #~ msgstr "Usa Estimados"

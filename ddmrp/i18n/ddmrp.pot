@@ -124,6 +124,7 @@ msgstr ""
 
 #. module: ddmrp
 #: model:ir.model.fields,field_description:ddmrp.field_product_adu_calculation_method_method
+#: model:ir.model.fields,field_description:ddmrp.field_stock_warehouse_orderpoint_adu_calculation_method_type
 msgid "Calculation method"
 msgstr ""
 
@@ -197,6 +198,16 @@ msgid "DDMRP Chart"
 msgstr ""
 
 #. module: ddmrp
+#: model:ir.model.fields,field_description:ddmrp.field_stock_warehouse_orderpoint_ddmrp_demand_chart
+msgid "DDMRP Demand Chart"
+msgstr ""
+
+#. module: ddmrp
+#: model:ir.model.fields,field_description:ddmrp.field_stock_warehouse_orderpoint_ddmrp_supply_chart
+msgid "DDMRP Supply Chart"
+msgstr ""
+
+#. module: ddmrp
 #: model:ir.ui.view,arch_db:ddmrp.report_mrpbomstructure_ddmrp
 msgid "DLT"
 msgstr ""
@@ -206,6 +217,11 @@ msgstr ""
 #: model:ir.model.fields,field_description:ddmrp.field_mrp_bom_line_dlt
 #: model:ir.model.fields,field_description:ddmrp.field_stock_warehouse_orderpoint_dlt
 msgid "Decoupled Lead Time (days)"
+msgstr ""
+
+#. module: ddmrp
+#: model:ir.ui.view,arch_db:ddmrp.view_warehouse_orderpoint_form
+msgid "Demand"
 msgstr ""
 
 #. module: ddmrp
@@ -403,7 +419,7 @@ msgstr ""
 
 #. module: ddmrp
 #: model:ir.model.fields,field_description:ddmrp.field_stock_buffer_profile_lead_time_factor
-#: model:ir.model.fields,field_description:ddmrp.field_stock_buffer_profile_lead_time_id_5648
+#: model:ir.model.fields,field_description:ddmrp.field_stock_buffer_profile_lead_time_id_5689
 msgid "Lead Time Factor"
 msgstr ""
 
@@ -487,7 +503,19 @@ msgid "Net flow position (% of TOG)"
 msgstr ""
 
 #. module: ddmrp
-#: code:addons/ddmrp/models/stock_warehouse_orderpoint.py:394
+#: code:addons/ddmrp/models/stock_warehouse_orderpoint.py:291
+#, python-format
+msgid "No demand detected."
+msgstr ""
+
+#. module: ddmrp
+#: code:addons/ddmrp/models/stock_warehouse_orderpoint.py:328
+#, python-format
+msgid "No supply detected."
+msgstr ""
+
+#. module: ddmrp
+#: code:addons/ddmrp/models/stock_warehouse_orderpoint.py:493
 #, python-format
 msgid "Non-completed Moves"
 msgstr ""
@@ -715,11 +743,6 @@ msgid "Reordering Rule DDMRP calculation"
 msgstr ""
 
 #. module: ddmrp
-#: model:ir.model.fields,field_description:ddmrp.field_mrp_production_orderpoint_id
-msgid "Reordering rule"
-msgstr ""
-
-#. module: ddmrp
 #: selection:stock.buffer.profile,replenish_method:0
 msgid "Replenished"
 msgstr ""
@@ -790,6 +813,16 @@ msgstr ""
 
 #. module: ddmrp
 #: model:ir.ui.view,arch_db:ddmrp.view_warehouse_orderpoint_form
+msgid "Supply"
+msgstr ""
+
+#. module: ddmrp
+#: model:ir.ui.view,arch_db:ddmrp.view_warehouse_orderpoint_form
+msgid "Supply & Demand"
+msgstr ""
+
+#. module: ddmrp
+#: model:ir.ui.view,arch_db:ddmrp.view_warehouse_orderpoint_form
 msgid "The green zone determines the average order frequency and the order size. It is determined as the maximum of the following three factors: Minimum Order Cycle, Lead Time Factor and Minimum Order Quantity."
 msgstr ""
 
@@ -842,7 +875,7 @@ msgstr ""
 
 #. module: ddmrp
 #: model:ir.model.fields,field_description:ddmrp.field_stock_buffer_profile_variability_factor
-#: model:ir.model.fields,field_description:ddmrp.field_stock_buffer_profile_variability_id_5649
+#: model:ir.model.fields,field_description:ddmrp.field_stock_buffer_profile_variability_id_5690
 msgid "Variability Factor"
 msgstr ""
 

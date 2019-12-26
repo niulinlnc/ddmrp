@@ -112,7 +112,8 @@
                     <field name="minimum_order_quantity"/>
                     <field name="adu"/>
                     <field name="adu_calculation_method"/>
-                    <field name="adu_fixed"/>
+                    <field name="adu_calculation_method_type" invisible="1"/>
+                    <field name="adu_fixed" attrs="{'invisible': [('adu_calculation_method_type', '!=', 'fixed')]}"/>
                     <label for="order_spike_horizon"/>
                     <div name="order_spike_horizon">
                         <field name="order_spike_horizon" class="oe_inline"/> days
@@ -169,8 +170,23 @@
                 </group>
             </xpath>
             <sheet position="inside">
-                <notebook>
-                    <!--Meant to be inherited by other modules.-->
+                <notebook attrs="{'invisible':[('buffer_profile_id','=',False)]}">
+                    <page string="Supply &amp; Demand" name="demand_supply_bars">
+                        <group>
+                            <group string="Supply">
+                                <div style="margin-top: 1em;">
+                                    <field name="ddmrp_supply_chart" style="height:400px"
+                                           widget="bokeh_chart" nolabel="1"/>
+                                </div>
+                            </group>
+                            <group string="Demand">
+                                <div style="margin-top: 1em;">
+                                    <field name="ddmrp_demand_chart" style="height:400px"
+                                           widget="bokeh_chart" nolabel="1"/>
+                                </div>
+                            </group>
+                        </group>
+                    </page>
                 </notebook>
             </sheet>
         </field>
@@ -186,9 +202,9 @@
             <tree string="Buffer monitor"
                   decoration-danger="procure_recommended_qty &gt; 0">
                 <field name="product_id"/>
-                <field name="product_uom" string="UoM"/>
                 <field name="warehouse_id"/>
                 <field name="location_id"/>
+                <field name="product_uom" string="UoM"/>
                 <field name="planning_priority_level"
                        options="{
                        &quot;bg_color&quot;: &quot;red:planning_priority_level=='1_red';yellow:planning_priority_level=='2_yellow';green:planning_priority_level == '3_green'&quot;,
@@ -218,7 +234,7 @@
                 <field name="qualified_demand"/>
                 <field name="net_flow_position"/>
                 <field name="procure_recommended_qty"/>
-                <field name="procure_uom_id"/>
+                <field name="procure_uom_id" groups="product.group_uom"/>
                 <field name="procure_recommended_date"/>
                 <button string="Create Procurement"
                         name="%(stock_orderpoint_manual_procurement.act_make_procurement_from_orderpoint)d"
